@@ -1,6 +1,7 @@
 <html class="fullscreen">
 <head>
 <title>Game!</title>    
+<script src="https://pedroth.github.io/nabla.js/dist/index.js"></script>
 </head>
 <style>
     /*html, body,canvas {
@@ -90,7 +91,9 @@
     
 
 </body>
+
  <script> 
+    const {ArrayUtils} = Nabla
     var canvas=document.getElementById("canvas");
     var context=canvas.getContext("2d");  
     var mouse=[0,0];//x and y
@@ -119,6 +122,29 @@
     var oneplayer;
     //integer with only two values 0,1 that decides who is the player selecting menus
     var goodTurn;
+    let GoodAttacks_iterator
+    let GoodDefense_iterator
+    let GoodEvolve_iterator
+    let EvilAttacks_iterator
+    let EvilDefense_iterator
+    let EvilEvolve_iterator
+    let Intro_iterator
+    let Idle_iterator
+    let BothAttack_iterator
+
+
+
+    ActionIterator = (length) => {
+        let i = 0;
+        const first = ArrayUtils.range(0,length)
+        let permute=ArrayUtils.randomPermute(first)
+        return {next: () => {
+        if(i<length) return permute[i++]
+        permute=ArrayUtils.randomPermute(first)
+        i=0
+        return permute[i++]
+        }}
+    }
     
     
     
@@ -1964,19 +1990,20 @@
             menu.Buttons['GoodText'].innerHTML="LOADING...";
             //Get Intro Images
             importImagesToArray(Intro,adressMenu)
+            Intro_iterator=ActionIterator(Intro.length)
             
         }
         if(stages==1){
             menu.moveBar(Math.round(loading*stages));
             //Get Idle Images
             importImagesToArray(Idle,adressIdle)
-            
+            Idle_iterator=ActionIterator(Idle.length)
         }
         if(stages==2){
             menu.moveBar(Math.round(loading*stages));
             //Get GoodAttacks Images
             importImagesToArray(GoodAttacks,adressGoodAttacks)
-            
+            GoodAttacks_iterator=ActionIterator(GoodAttacks.length)
         }
         if(stages==3){
             menu.moveBar(Math.round(loading*stages));
@@ -1996,6 +2023,7 @@
             //     }
             //     EvilDefense.push(animation_images);
             // }
+            EvilDefense_iterator=ActionIterator(EvilDefense.length)
         }
         if(stages==4){
             menu.moveBar(Math.round(loading*stages));
@@ -2015,6 +2043,7 @@
             //     }
             //     EvilAttacks.push(animation_images);
             // }
+            EvilAttacks_iterator=ActionIterator(EvilAttacks.length)
         }
         if(stages==5){
             menu.moveBar(Math.round(loading*stages));
@@ -2034,6 +2063,7 @@
             //     }
             //     GoodDefense.push(animation_images);
             // }
+            GoodDefense_iterator=ActionIterator(GoodDefense.length)
         }
         if(stages==6){
             menu.moveBar(Math.round(loading*stages));
@@ -2063,6 +2093,11 @@
                     animation_images=[];
                 }
                 
+            }
+            GoodEvolve_iterator={
+                'Health':ActionIterator(GoodEvolve['Health'].length),
+                'Defense':ActionIterator(GoodEvolve['Defense'].length),
+                'Attack':ActionIterator(GoodEvolve['Attack'].length)
             }
         }
         if(stages==7){
@@ -2094,13 +2129,17 @@
                 }
                 
             }
-            
+            EvilEvolve_iterator={
+                'Health':ActionIterator(EvilEvolve["Health"].length),
+                'Defense':ActionIterator(EvilEvolve["Defense"].length),
+                'Attack':ActionIterator(EvilEvolve["Attack"].length)
+            }
         }
         if(stages==8){
             menu.moveBar(Math.round(loading*stages));
             menu.Buttons['GoodText'].style.visibility="visible";
             menu.Buttons['GoodText'].innerHTML="LOADING...";
-            //Get Intro Images
+            //Get BothAttacks images
             var number_of_folders=parseInt(readTextFile(adressBothAttack+"/Index.txt"));
             console.log("Numeber:"+number_of_folders);
             var animation_images=[];
@@ -2118,7 +2157,7 @@
             menu.moveBar(100);
         }
         //end of loading
-        
+        BothAttack_iterator=ActionIterator(BothAttack.length)
         menu.Buttons['GoodText'].style.visibility="hidden";
     } 
     
