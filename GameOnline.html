@@ -72,7 +72,7 @@
     <!--<h1 class="text" style="top:30%;left:45%;width:10%;height:10%;"><font color="white"></font></h1>-->
     <!--Now The Game Menus -->
     <!--First Menu-->
-    <button class="btn" id="create_game" style="top:40%;left:45%;width:10%;height:10%;">Create Game</button>
+    <button class="btn" id="create_game" style="top:40%;left:43%;width:10%;height:10%;">Create Game</button>
     <button class="btn" id="one_player" style="top:40%;left:45%;width:10%;height:10%;">One Player</button>
     <button class="btn" id="two_players" style="top:60%;left:45%;width:10%;height:10%;">Two Players</button>
     <!--Choose Side Menu if player choose one player mode--> 
@@ -163,7 +163,17 @@
         return permute[i++]
         }}
     }
-    
+    const copyToClipboard = (str) => {
+        const el = document.createElement("textarea");
+        el.value = str;
+        el.setAttribute("readonly", "");
+        el.style.position = "absolute";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+    };
     
     
     class Menu{
@@ -243,8 +253,11 @@
 
             return text;
         }
+        
         CreateGame(){
-            window.location.search=menu.RandomPassSync(6)
+            let room_id=menu.RandomPassSync(6)
+            copyToClipboard(window.location.href+'?'+room_id)
+            window.location.search=room_id
         }
         moveBar(percentage){
             //change text
@@ -644,7 +657,11 @@
         }
         //
         Nothing(){
-            // do nothing
+            // create room on server
+            //let room=menu.getRoomName()
+            //if server data does not exists, creats
+            //send(JSON.stringify({round:this.round,decision:1}))
+            //communication("send",)
             if(menu.oneplayer){
                 menu.showGoodEvilSideButtons()
                 this.state++;// go to chhose side state
