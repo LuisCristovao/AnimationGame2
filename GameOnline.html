@@ -485,10 +485,10 @@
             //if one is still the good player
             if(good_data.round==0 && good_data.decision==0){
                 //
-                menu.goodChoice=true;
+                menu.choose_good_side=true;
                 this.send(JSON.stringify({round:0,decision:1}))
             }else{
-                menu.goodChoice=false;
+                menu.choose_good_side=false;
                 this.send(JSON.stringify({round:0,decision:1}))
             }
         }
