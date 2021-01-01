@@ -401,7 +401,7 @@
         }
         async communication(get="get",msg="", good_or_evil){
             let url="https://generic-server-py.herokuapp.com/"
-            let sync_id=getRoomName()+"_"+good_or_evil
+            let sync_id=this.getRoomName()+"_"+good_or_evil
             if(get=="get"){
                     try{
         
@@ -435,21 +435,61 @@
         async send(msg){
             //if good player
             if(menu.choose_good_side){
-                return await communication("send",msg,"good")
+                return await this.communication("send",msg,"good")
             }
             //if evil player
             else{
-                return await communication("send",msg,"evil")
+                return await this.communication("send",msg,"evil")
             }
         }
         async get(){
+            //if good player, will get evil info
+            if(menu.choose_good_side){
+                return await this.communication("get","","evil")
+            }
+            //if evil player, will get good info
+            else{
+                return await this.communication("get","","good")
+            }
+        }
+        
+        initialize_player_options_array(){
             //if good player
             if(menu.choose_good_side){
-                return await communication("get","","good")
+                this.goodOptions=[]
             }
-            //if evil player
+            //evil player
             else{
-                return await communication("get","","evil")
+                this.evilOptions=[]
+            }
+        }
+        get_player_options_array(){
+            //if good player
+            if(menu.choose_good_side){
+                return this.goodOptions
+            }
+            //evil player
+            else{
+                return this.evilOptions
+            }
+        }
+        
+        async AddEntriesInServer(){
+            let msg=JSON.stringify({round:this.round,decision:0})
+            await this.communication("send",msg,"good")
+            await this.communication("send",msg,"evil")
+        }
+        async SelectPlayer(){
+            let good_data=JSON.parse(await this.communication("get","","good"))
+            let evil_data=JSON.parse(await this.communication("get","","evil"))
+            //if one is still the good player
+            if(good_data.round==0 && good_data.decision==0){
+                //
+                menu.goodChoice=true;
+                this.send(JSON.stringify({round:0,decision:1}))
+            }else{
+                menu.goodChoice=false;
+                this.send(JSON.stringify({round:0,decision:1}))
             }
         }
         NextState(){
@@ -657,583 +697,255 @@
         }
         //
         Nothing(){
-            // create room on server
-            //let room=menu.getRoomName()
-            //if server data does not exists, creats
-            //send(JSON.stringify({round:this.round,decision:1}))
-            //communication("send",)
-            if(menu.oneplayer){
-                menu.showGoodEvilSideButtons()
+            // does not have room name
+            if(this.getRoomName()==""){
+                //wait until player choose to create
+            }else{
+                this.AddEntriesInServer()
                 this.state++;// go to chhose side state
             }
-            if(menu.twoplayers){
-                this.state+=2;//go to idle state
-            }
+            
         }
         ChooseSide(){
-            if(menu.choose_good_side!=null){
-                //it means that player had chosen the side
-                this.state++//go to idle state
-            }
+            this.SelectPlayer()//detects if you are the good or evil player base on server data
+            this.state++;//go to idle state
         }
         //
         Idle(){
-            
-            if(menu.oneplayer){
-                if(menu.choose_good_side){
-
-                    //Now make evil player decisions randomly for now
-                    if(this.idle_state==5){
-                        //randomly select first layer menu
-                        //the first layer menu has 3 options 0-attack,1-defense,2-powerUp
-                        this.evilOptions.push(Math.floor(Math.random()*3));
-                        //Now randomly select second layer menu
-                        //this layer has these option 0-attack,1-defense,3-health,lv1-4,lv2-5,lv3-6
-                        //but if first option was power up then it only have 3 option 0,1,3
-                        //else 4,5,6
-                        
-                        //A powerUp
-                        if(this.evilOptions[0]==2){
-                            var n =Math.random();
-                            if(n<=0.33){
-                                this.evilOptions.push(0);
-                            }
-                            if(n>0.33 && n<=0.66){
-                                this.evilOptions.push(1);
-                            }
-                            if(n>0.66){
-                                this.evilOptions.push(3);
-                            }
-                        }
-                        //Attack or defense
-                        else{
-                            this.evilOptions.push(Math.floor(Math.random()*3+4));
-                        }
-                        //Go to next state
-                        //skip calculator part
-                        this.state=2;
-                    }
-                    //Now the good player made its final choice goodOptions has two values
-                    //Now its evil playr choice, so need to prepare menu for evilplayer
-                    if(this.idle_state==4){
-                        //hide previouse menus and show basic menu again
-                        menu.HideButtons();
-                        menu.ShowIdleMenus();
-                        //forget previously touched buttons
-                        menu.DeSelectButtons();
-                        //show evil text I use good text because its more centered
-                        menu.Buttons['GoodText'].style.visibility="visible";
-                        menu.Buttons['GoodText'].innerHTML='<font color="purple">Second Player(Evil) Turn!</font>';
-                        this.idle_state++;
-                        
-                    }
-                    // wait for Goodplayer second layer menu choice
-                    if(this.idle_state==3){
-                        //menu.Buttons['GoodText'].style.visibility="visible";
-                        //menu.Buttons['GoodText'].innerHTML='<font color="blue">Choose resource quantity consumption.</font>';
-                        if(menu.Selected['return']){
-                            console.log('Return selected');
-                            //empty options array;
-                            this.goodOptions=[];
-                            
-                            this.idle_state=0;
-                        }
-                        if(menu.Selected['lv1']){
-                            this.goodOptions.push(4);//4 means lv1
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['lv2']){
-                            this.goodOptions.push(5);//5 means lv2
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['lv3']){
-                            this.goodOptions.push(6);//6 means lv3
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Attack']){
-                            this.goodOptions.push(0);//0 means attack
-                            this.idle_state++;
-                            
-                        }
-                        if(menu.Selected['Defense']){
-                            this.goodOptions.push(1);//1 means defense
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Health']){
-                            this.goodOptions.push(3);//3 means health
-                            this.idle_state++;
-                            
-                        }
-                        
-                    }
-                    //change second layer menus
-                    if(this.idle_state==2){
-                        //the player only had made one choice
-                        var opt=this.goodOptions[0];
-                        //every state begin a new
-                        menu.HideButtons();
-                        //show basic menu
-                        menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        menu.DeSelectButtons();
-                        //DeSelectButtons();
-                        
-                        //hide evolve button
-                        menu.Buttons['Evolve'].style.visibility='hidden';
-                        //show return button
-                        menu.Buttons['return'].style.visibility='visible';
-                        //if player selected attack or defense
-                        if(opt==0 || opt==1){
-                            menu.Buttons['Attack'].style.visibility='hidden';
-                            menu.Buttons['Defense'].style.visibility='hidden';
-                            menu.Buttons['lv1'].style.visibility="visible";
-                            menu.Buttons['lv2'].style.visibility="visible";
-                            menu.Buttons['lv3'].style.visibility="visible";
-                            
-                            
-                            this.idle_state++;
-                        }
-                        //if selected evolve/powerup button
-                        else{
-                            //Attack and defense buttons already showing
-                            //only need to show health button
-                            menu.Buttons['Health'].style.visibility='visible';
-                            this.idle_state++;
-                        }
-                        
-                    }
-                    // Wait for good player choice
-                    if(this.idle_state==1){
-                        //every state begin a new
-                        //menu.HideButtons();
-                        //show basic menu
-                        //menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        //menu.DeSelectButtons();
-                        
-                        
-                        menu.Buttons['GoodText'].style.visibility="visible";
-                        menu.Buttons['GoodText'].innerHTML='<font color="blue">First Player(Good) Choose Option!</font>';
-                        //Just see the first selection menu
-                        if(menu.Selected['Attack']){
-                            this.goodOptions.push(0);//0 means attack
-                            this.idle_state++;
-                            
-                        }
-                        if(menu.Selected['Defense']){
-                            this.goodOptions.push(1);//1 means defense
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Evolve']){
-                            this.goodOptions.push(2);//2 means evolve
-                            this.idle_state++;
-                        }
-                        
-                        //this.idle_state++;
-                    }
-                    // Select Idle animation as current
-                    if(this.idle_state==0){
-                        menu.HideButtons();
-                        time=0;
-                        actualAnimationRunning=Idle[0];
-                        menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        menu.DeSelectButtons();
-                        this.idle_state++;
-                    }
-                }else{
-                    //Now make good player decisions randomly for now
-                    if(this.idle_state==5){
-                        //randomly select first layer menu
-                        //the first layer menu has 3 options 0-attack,1-defense,2-powerUp
-                        this.goodOptions.push(Math.floor(Math.random()*3));
-                        //Now randomly select second layer menu
-                        //this layer has these option 0-attack,1-defense,3-health,lv1-4,lv2-5,lv3-6
-                        //but if first option was power up then it only have 3 option 0,1,3
-                        //else 4,5,6
-                        
-                        //A powerUp
-                        if(this.goodOptions[0]==2){
-                            var n =Math.random();
-                            if(n<=0.33){
-                                this.goodOptions.push(0);
-                            }
-                            if(n>0.33 && n<=0.66){
-                                this.goodOptions.push(1);
-                            }
-                            if(n>0.66){
-                                this.goodOptions.push(3);
-                            }
-                        }
-                        //Attack or defense
-                        else{
-                            this.goodOptions.push(Math.floor(Math.random()*3+4));
-                        }
-                        //Go to next state
-                        //skip calculator part
-                        this.state=2;
-                    }
-                    //Now the evil player made its final choice goodOptions has two values
-                    //Now its evil playr choice, so need to prepare menu for goodplayer
-                    if(this.idle_state==4){
-                        //hide previouse menus and show basic menu again
-                        menu.HideButtons();
-                        menu.ShowIdleMenus();
-                        //forget previously touched buttons
-                        menu.DeSelectButtons();
-                        //show evil text I use good text because its more centered
-                        menu.Buttons['GoodText'].style.visibility="visible";
-                        menu.Buttons['GoodText'].innerHTML='<font color="blue">Second Player(Good) Turn!</font>';
-                        this.idle_state++;
-                        
-                    }
-                    // wait for Evilplayer second layer menu choice
-                    if(this.idle_state==3){
-                        //menu.Buttons['GoodText'].style.visibility="visible";
-                        //menu.Buttons['GoodText'].innerHTML='<font color="blue">Choose resource quantity consumption.</font>';
-                        if(menu.Selected['return']){
-                            console.log('Return selected');
-                            //empty options array;
-                            this.evilOptions=[];
-                            
-                            this.idle_state=0;
-                        }
-                        if(menu.Selected['lv1']){
-                            this.evilOptions.push(4);//4 means lv1
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['lv2']){
-                            this.evilOptions.push(5);//5 means lv2
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['lv3']){
-                            this.evilOptions.push(6);//6 means lv3
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Attack']){
-                            this.evilOptions.push(0);//0 means attack
-                            this.idle_state++;
-                            
-                        }
-                        if(menu.Selected['Defense']){
-                            this.evilOptions.push(1);//1 means defense
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Health']){
-                            this.evilOptions.push(3);//3 means health
-                            this.idle_state++;
-                            
-                        }
-                        
-                    }
-                    //change second layer menus
-                    if(this.idle_state==2){
-                        //the player only had made one choice
-                        var opt=this.evilOptions[0];
-                        //every state begin a new
-                        menu.HideButtons();
-                        //show basic menu
-                        menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        menu.DeSelectButtons();
-                        //DeSelectButtons();
-                        
-                        //hide evolve button
-                        menu.Buttons['Evolve'].style.visibility='hidden';
-                        //show return button
-                        menu.Buttons['return'].style.visibility='visible';
-                        //if player selected attack or defense
-                        if(opt==0 || opt==1){
-                            menu.Buttons['Attack'].style.visibility='hidden';
-                            menu.Buttons['Defense'].style.visibility='hidden';
-                            menu.Buttons['lv1'].style.visibility="visible";
-                            menu.Buttons['lv2'].style.visibility="visible";
-                            menu.Buttons['lv3'].style.visibility="visible";
-                            
-                            
-                            this.idle_state++;
-                        }
-                        //if selected evolve/powerup button
-                        else{
-                            //Attack and defense buttons already showing
-                            //only need to show health button
-                            menu.Buttons['Health'].style.visibility='visible';
-                            this.idle_state++;
-                        }
-                        
-                    }
-                    // Wait for evil player choice
-                    if(this.idle_state==1){
-                        //every state begin a new
-                        //menu.HideButtons();
-                        //show basic menu
-                        //menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        //menu.DeSelectButtons();
-                        
-                        
-                        menu.Buttons['GoodText'].style.visibility="visible";
-                        menu.Buttons['GoodText'].innerHTML='<font color="purple">First Player(Evil) Choose Option!</font>';
-                        //Just see the first selection menu
-                        if(menu.Selected['Attack']){
-                            this.evilOptions.push(0);//0 means attack
-                            this.idle_state++;
-                            
-                        }
-                        if(menu.Selected['Defense']){
-                            this.evilOptions.push(1);//1 means defense
-                            this.idle_state++;
-                        }
-                        if(menu.Selected['Evolve']){
-                            this.evilOptions.push(2);//2 means evolve
-                            this.idle_state++;
-                        }
-                        
-                        //this.idle_state++;
-                    }
-                    // Select Idle animation as current
-                    if(this.idle_state==0){
-                        menu.HideButtons();
-                        time=0;
-                        actualAnimationRunning=Idle[0];
-                        menu.ShowIdleMenus();
-                        //Deselect previous selected buttons
-                        menu.DeSelectButtons();
-                        this.idle_state++;
-                    }
+        
+        
+        
+            console.log('idle state:'+this.idle_state);
+            //Final state, every thing is chosen 
+            if(this.idle_state==8){
+                //the calculator part needs lots of thinking
+                //probably need to put in this idle or at least change 
+                //state to calculator and then return to idle state again
+                //state 2 is process choices
+                this.state=2;
+            }
+            //wait for evil player choice in second layer menus
+            if(this.idle_state==7){
+                //menu.Buttons['GoodText'].style.visibility="visible";
+                //menu.Buttons['GoodText'].innerHTML='<font color="purple">Choose resource quantity to consume</font>';
+                if(menu.Selected['return']){
+                    console.log('Return selected');
+                    //empty options array;
+                    this.evilOptions=[];
+                    
+                    this.idle_state=4;
+                }
+                if(menu.Selected['lv1']){
+                        this.evilOptions.push(4);//4 means lv1
+                    this.idle_state++;
+                }
+                if(menu.Selected['lv2']){
+                        this.evilOptions.push(5);//5 means lv2
+                    this.idle_state++;
+                }
+                if(menu.Selected['lv3']){
+                        this.evilOptions.push(6);//6 means lv3
+                    this.idle_state++;
+                }
+                if(menu.Selected['Attack']){
+                    this.evilOptions.push(0);//0 means attack
+                    this.idle_state++;
+                    
+                }
+                if(menu.Selected['Defense']){
+                    this.evilOptions.push(1);//1 means defense
+                    this.idle_state++;
+                }
+                if(menu.Selected['Health']){
+                    this.evilOptions.push(3);//3 means health
+                    this.idle_state++;
+                    
                 }
             }
-            if(menu.twoplayers){
-                console.log('idle state:'+this.idle_state);
-                //Final state, every thing is chosen 
-                if(this.idle_state==8){
-                    //the calculator part needs lots of thinking
-                    //probably need to put in this idle or at least change 
-                    //state to calculator and then return to idle state again
-                    //state 2 is process choices
-                    this.state=2;
-                }
-                //wait for evil player choice in second layer menus
-                if(this.idle_state==7){
-                    //menu.Buttons['GoodText'].style.visibility="visible";
-                    //menu.Buttons['GoodText'].innerHTML='<font color="purple">Choose resource quantity to consume</font>';
-                    if(menu.Selected['return']){
-                        console.log('Return selected');
-                        //empty options array;
-                        this.evilOptions=[];
-                        
-                        this.idle_state=4;
-                    }
-                    if(menu.Selected['lv1']){
-                         this.evilOptions.push(4);//4 means lv1
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['lv2']){
-                         this.evilOptions.push(5);//5 means lv2
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['lv3']){
-                         this.evilOptions.push(6);//6 means lv3
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Attack']){
-                        this.evilOptions.push(0);//0 means attack
-                        this.idle_state++;
-                        
-                    }
-                    if(menu.Selected['Defense']){
-                        this.evilOptions.push(1);//1 means defense
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Health']){
-                        this.evilOptions.push(3);//3 means health
-                        this.idle_state++;
-                        
-                    }
-                }
-                //Change to second menu layer for evil player
-                if(this.idle_state==6){
-                    //the player only had made one choice
-                    var opt=this.evilOptions[0];
-                     //every state begin a new
-                    menu.HideButtons();
-                    //show basic menu
-                    menu.ShowIdleMenus();
-                    //Deselect previous selected buttons
-                    menu.DeSelectButtons();
-                    //DeSelectButtons();
+            //Change to second menu layer for evil player
+            if(this.idle_state==6){
+                //the player only had made one choice
+                var opt=this.evilOptions[0];
+                    //every state begin a new
+                menu.HideButtons();
+                //show basic menu
+                menu.ShowIdleMenus();
+                //Deselect previous selected buttons
+                menu.DeSelectButtons();
+                //DeSelectButtons();
+                
+                //hide evolve button
+                menu.Buttons['Evolve'].style.visibility='hidden';
+                //show return button
+                menu.Buttons['return'].style.visibility='visible';
+                //if player selected attack or defense
+                if(opt==0 || opt==1){
+                    menu.Buttons['Attack'].style.visibility='hidden';
+                    menu.Buttons['Defense'].style.visibility='hidden';
+                    menu.Buttons['lv1'].style.visibility="visible";
+                    menu.Buttons['lv2'].style.visibility="visible";
+                    menu.Buttons['lv3'].style.visibility="visible";
                     
-                    //hide evolve button
-                    menu.Buttons['Evolve'].style.visibility='hidden';
-                    //show return button
-                    menu.Buttons['return'].style.visibility='visible';
-                    //if player selected attack or defense
-                    if(opt==0 || opt==1){
-                        menu.Buttons['Attack'].style.visibility='hidden';
-                        menu.Buttons['Defense'].style.visibility='hidden';
-                        menu.Buttons['lv1'].style.visibility="visible";
-                        menu.Buttons['lv2'].style.visibility="visible";
-                        menu.Buttons['lv3'].style.visibility="visible";
-                        
-                        
-                        this.idle_state++;
-                    }
-                    //if selected evolve/powerup button
-                    else{
-                        //Attack and defense buttons already showing
-                        //only need to show health button
-                        menu.Buttons['Health'].style.visibility='visible';
-                        this.idle_state++;
-                    }
                     
+                    this.idle_state++;
                 }
-                //Wait for evil player first menu layer choice
-                if(this.idle_state==5){
-                    //Just see the first selection menu
-                    if(menu.Selected['Attack']){
-                        this.evilOptions.push(0);//0 means attack
-                        this.idle_state++;
-                        
-                    }
-                    if(menu.Selected['Defense']){
-                        this.evilOptions.push(1);//1 means defense
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Evolve']){
-                        this.evilOptions.push(2);//2 means evolve
-                        this.idle_state++;
-                    }
+                //if selected evolve/powerup button
+                else{
+                    //Attack and defense buttons already showing
+                    //only need to show health button
+                    menu.Buttons['Health'].style.visibility='visible';
+                    this.idle_state++;
                 }
                 
-                //Now the good player made its final choice goodOptions has two values
-                //Now its evil playr choice, so need to prepare menu for evilplayer
-                if(this.idle_state==4){
-                    //hide previouse menus and show basic menu again
-                    menu.HideButtons();
-                    menu.ShowIdleMenus();
-                    //forget previously touched buttons
-                    menu.DeSelectButtons();
-                    //show evil text I use good text because its more centered
-                    menu.Buttons['GoodText'].style.visibility="visible";
-                    menu.Buttons['GoodText'].innerHTML='<font color="purple">Second Player(Evil) Turn!</font>';
+            }
+            //Wait for evil player first menu layer choice
+            if(this.idle_state==5){
+                //Just see the first selection menu
+                if(menu.Selected['Attack']){
+                    this.evilOptions.push(0);//0 means attack
                     this.idle_state++;
                     
                 }
-                // wait for Goodplayer second layer menu choice
-                if(this.idle_state==3){
-                    //menu.Buttons['GoodText'].style.visibility="visible";
-                    //menu.Buttons['GoodText'].innerHTML='<font color="blue">Choose resource quantity consumption.</font>';
-                    if(menu.Selected['return']){
-                        console.log('Return selected');
-                        //empty options array;
-                        this.goodOptions=[];
-                        
-                        this.idle_state=0;
-                    }
-                    if(menu.Selected['lv1']){
-                         this.goodOptions.push(4);//4 means lv1
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['lv2']){
-                         this.goodOptions.push(5);//5 means lv2
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['lv3']){
-                         this.goodOptions.push(6);//6 means lv3
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Attack']){
-                        this.goodOptions.push(0);//0 means attack
-                        this.idle_state++;
-                        
-                    }
-                    if(menu.Selected['Defense']){
-                        this.goodOptions.push(1);//1 means defense
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Health']){
-                        this.goodOptions.push(3);//3 means health
-                        this.idle_state++;
-                        
-                    }
-                    
+                if(menu.Selected['Defense']){
+                    this.evilOptions.push(1);//1 means defense
+                    this.idle_state++;
                 }
-                //change second layer menus
-                if(this.idle_state==2){
-                    //the player only had made one choice
-                    var opt=this.goodOptions[0];
-                     //every state begin a new
-                    menu.HideButtons();
-                    //show basic menu
-                    menu.ShowIdleMenus();
-                    //Deselect previous selected buttons
-                    menu.DeSelectButtons();
-                    //DeSelectButtons();
-                    
-                    //hide evolve button
-                    menu.Buttons['Evolve'].style.visibility='hidden';
-                    //show return button
-                    menu.Buttons['return'].style.visibility='visible';
-                    //if player selected attack or defense
-                    if(opt==0 || opt==1){
-                        menu.Buttons['Attack'].style.visibility='hidden';
-                        menu.Buttons['Defense'].style.visibility='hidden';
-                        menu.Buttons['lv1'].style.visibility="visible";
-                        menu.Buttons['lv2'].style.visibility="visible";
-                        menu.Buttons['lv3'].style.visibility="visible";
-                        
-                        
-                        this.idle_state++;
-                    }
-                    //if selected evolve/powerup button
-                    else{
-                        //Attack and defense buttons already showing
-                        //only need to show health button
-                        menu.Buttons['Health'].style.visibility='visible';
-                        this.idle_state++;
-                    }
-                    
-                }
-                // Wait for good player choice
-                if(this.idle_state==1){
-                    //every state begin a new
-                    //menu.HideButtons();
-                    //show basic menu
-                    //menu.ShowIdleMenus();
-                    //Deselect previous selected buttons
-                    //menu.DeSelectButtons();
-                    
-                    
-                    menu.Buttons['GoodText'].style.visibility="visible";
-                    menu.Buttons['GoodText'].innerHTML='<font color="blue">First Player(Good) Choose Option!</font>';
-                    //Just see the first selection menu
-                    if(menu.Selected['Attack']){
-                        this.goodOptions.push(0);//0 means attack
-                        this.idle_state++;
-                        
-                    }
-                    if(menu.Selected['Defense']){
-                        this.goodOptions.push(1);//1 means defense
-                        this.idle_state++;
-                    }
-                    if(menu.Selected['Evolve']){
-                        this.goodOptions.push(2);//2 means evolve
-                        this.idle_state++;
-                    }
-                    
-                    //this.idle_state++;
-                }
-                // Select Idle animation as current
-                if(this.idle_state==0){
-                    menu.HideButtons();
-                    time=0;
-                    actualAnimationRunning=Idle[0];
-                    menu.ShowIdleMenus();
-                    //Deselect previous selected buttons
-                    menu.DeSelectButtons();
+                if(menu.Selected['Evolve']){
+                    this.evilOptions.push(2);//2 means evolve
                     this.idle_state++;
                 }
             }
+            
+            //Now the good player made its final choice goodOptions has two values
+            //Now its evil playr choice, so need to prepare menu for evilplayer
+            if(this.idle_state==4){
+                //hide previouse menus and show basic menu again
+                menu.HideButtons();
+                menu.ShowIdleMenus();
+                //forget previously touched buttons
+                menu.DeSelectButtons();
+                //show evil text I use good text because its more centered
+                menu.Buttons['GoodText'].style.visibility="visible";
+                menu.Buttons['GoodText'].innerHTML='<font color="purple">Second Player(Evil) Turn!</font>';
+                this.idle_state++;
+                
+            }
+            // wait for Goodplayer second layer menu choice
+            if(this.idle_state==3){
+                //menu.Buttons['GoodText'].style.visibility="visible";
+                //menu.Buttons['GoodText'].innerHTML='<font color="blue">Choose resource quantity consumption.</font>';
+                if(menu.Selected['return']){
+                    console.log('Return selected');
+                    //empty options array;
+                    this.initialize_player_options_array()
+                    //this.goodOptions=[];
+                    
+                    this.idle_state=0;
+                }
+                if(menu.Selected['lv1']){
+                        this.get_player_options_array().push(4);//4 means lv1
+                    this.idle_state++;
+                }
+                if(menu.Selected['lv2']){
+                        this.get_player_options_array().push(5);//5 means lv2
+                    this.idle_state++;
+                }
+                if(menu.Selected['lv3']){
+                        this.get_player_options_array().push(6);//6 means lv3
+                    this.idle_state++;
+                }
+                if(menu.Selected['Attack']){
+                    this.get_player_options_array().push(0);//0 means attack
+                    this.idle_state++;
+                    
+                }
+                if(menu.Selected['Defense']){
+                    this.get_player_options_array().push(1);//1 means defense
+                    this.idle_state++;
+                }
+                if(menu.Selected['Health']){
+                    this.get_player_options_array().push(3);//3 means health
+                    this.idle_state++;
+                    
+                }
+                
+            }
+            //change second layer menus
+            if(this.idle_state==2){
+                //the player only had made one choice
+                var opt=this.get_player_options_array()[0];
+                    //every state begin a new
+                menu.HideButtons();
+                //show basic menu
+                menu.ShowIdleMenus();
+                //Deselect previous selected buttons
+                menu.DeSelectButtons();
+                //DeSelectButtons();
+                
+                //hide evolve button
+                menu.Buttons['Evolve'].style.visibility='hidden';
+                //show return button
+                menu.Buttons['return'].style.visibility='visible';
+                //if player selected attack or defense
+                if(opt==0 || opt==1){
+                    menu.Buttons['Attack'].style.visibility='hidden';
+                    menu.Buttons['Defense'].style.visibility='hidden';
+                    menu.Buttons['lv1'].style.visibility="visible";
+                    menu.Buttons['lv2'].style.visibility="visible";
+                    menu.Buttons['lv3'].style.visibility="visible";
+                    
+                    
+                    this.idle_state++;
+                }
+                //if selected evolve/powerup button
+                else{
+                    //Attack and defense buttons already showing
+                    //only need to show health button
+                    menu.Buttons['Health'].style.visibility='visible';
+                    this.idle_state++;
+                }
+                
+            }
+            // Wait for good player choice
+            if(this.idle_state==1){
+                //every state begin a new
+                //menu.HideButtons();
+                //show basic menu
+                //menu.ShowIdleMenus();
+                //Deselect previous selected buttons
+                //menu.DeSelectButtons();
+                
+                
+                menu.Buttons['GoodText'].style.visibility="visible";
+                menu.Buttons['GoodText'].innerHTML='<font color="blue">First Player(Good) Choose Option!</font>';
+                //Just see the first selection menu
+                if(menu.Selected['Attack']){
+                    this.get_player_options_array().push(0);//0 means attack
+                    this.idle_state++;
+                    
+                }
+                if(menu.Selected['Defense']){
+                    this.get_player_options_array().push(1);//1 means defense
+                    this.idle_state++;
+                }
+                if(menu.Selected['Evolve']){
+                    this.get_player_options_array().push(2);//2 means evolve
+                    this.idle_state++;
+                }
+                
+                //this.idle_state++;
+            }
+            // Select Idle animation as current
+            if(this.idle_state==0){
+                menu.HideButtons();
+                time=0;
+                actualAnimationRunning=Idle[0];
+                menu.ShowIdleMenus();
+                //Deselect previous selected buttons
+                menu.DeSelectButtons();
+                this.idle_state++;
+            }
+            
         }
         //
         Calculator(){
@@ -1950,6 +1662,7 @@
                     else{
                         //return to the begining of state machine
                         this.state=0;
+                        this.round++;
                     }
                 }
             }
