@@ -855,11 +855,11 @@
             
             //
             if(this.idle_state==6){
-                setTimeout(()=>{this.idle_state--},1000)
+                setTimeout(()=>{this.idle_state=5},1000)
             }
             //wait for other user choice
             if(this.idle_state==5){
-                this.idle_state++;
+                this.idle_state=6;
                 let other_player_decision=JSON.parse(await this.get())
                 if(other_player_decision.decision!=null && other_player_decision.decision!="" && other_player_decision.decision!=0){
                     if(other_player_decision.round==this.round && other_player_decision.decision!=1){
@@ -1043,6 +1043,7 @@
                 
                 //if good player chose an attack, meaning evil power Up has no effect
                 if(this.final_decision_good[0]==0){
+                    menu.HideButtons()
                     //good player gives evil damage
                     this.evilStatus[2]-=this.final_decision_good[1];
                     //good player consumes attack status
@@ -1218,6 +1219,7 @@
                         
                         //Good wins because he has defended
                         if(this.final_decision_good[0]==1){
+                            
                             //put just one animation the good animation
                             this.ProcessWrapUp(true);
                             //0 position is the text to use
