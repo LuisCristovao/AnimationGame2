@@ -357,6 +357,7 @@
             //
             this.round=0
             
+            this.timeout_2=null
             
             
             //0-attack;1-Defense;2-Evolve;3-Health;4-lv1;5-lv2;6-lv3
@@ -553,7 +554,48 @@
             return false
             
         }
-       
+       async checkOtherPlayerConnection(){
+        let good_data=null
+        let evil_data=null   
+        //if player is the good player check for evil player
+        if (menu.choose_good_side){
+            try{
+                evil_data=await this.communication("get","","evil")
+            }catch(e){
+                console.log(e)
+                return false
+            }
+            try{
+                evil_data=JSON.parse(evil_data)
+            }catch(e){
+                console.log(e)
+                return false
+            }
+            if(evil_data.decision==1){
+                return true
+            }
+            return false
+        }
+        else{
+            //check for good player
+            try{
+                good_data=await this.communication("get","","good")
+            }catch(e){
+                console.log(e)
+                return false
+            }
+            try{
+                good_data=JSON.parse(good_data)
+            }catch(e){
+                console.log(e)
+                return false
+            }
+            if(good_data.decision==1){
+                return true
+            }
+            return false
+        }
+       }
         NextState(){
             game.state++;
         }
@@ -760,10 +802,14 @@
         //
         Nothing(){
             // does not have room name
+            
             if(this.getRoomName()==""){
                 //wait until player choose to create
             }else{
                 this.AddEntriesInServer()
+                menu.HideButtons();
+                menu.Buttons['GoodText'].style.visibility="visible";
+                menu.Buttons['GoodText'].innerHTML=`<font color="black">Connecting...</font>`;
                 this.state++;// go to chose side state
             }
             
@@ -771,15 +817,33 @@
         async ChooseSide(){
             console.log('Choose Side state:'+this.choose_side_state);
             
+            if(this.choose_side_state==4){
+                //waiting for server info...
+                setTimeout(()=>{this.choose_side_state=3},1000)
+            }
+            if(this.choose_side_state==3){
+                //waiting for other player to connect....
+                this.choose_side_state=4
+                clearTimeout(this.timeout_2)
+                
+                menu.Buttons['GoodText'].style.visibility="visible";
+                menu.Buttons['GoodText'].innerHTML=`<font color="black">Waiting for the other player to Connect ....</font>`;
+                let success= await this.checkOtherPlayerConnection()
+                if(success){this.state=0;}
+            }
+            if(this.choose_side_state==2){
+                //waiting for server info...
+                
+            }
             if(this.choose_side_state==1){
                 this.choose_side_state=2
-                setTimeout(()=>{this.choose_side_state=0},1000)
+                this.timeout_2=setTimeout(()=>{this.choose_side_state=0},1000)
             }
             // if still did not chose side
             if(this.choose_side_state==0){
                 this.choose_side_state=1
                 let success=await this.SelectPlayer()//detects if you are the good or evil player base on server data
-                if(success){this.state++;}//go to idle state
+                if(success){this.choose_side_state=3}//go to idle state
             }
         }
         //
