@@ -72,7 +72,7 @@
     <!--<h1 class="text" style="top:30%;left:45%;width:10%;height:10%;"><font color="white"></font></h1>-->
     <!--Now The Game Menus -->
     <!--First Menu-->
-    <button class="btn" id="create_game" style="top:40%;left:43%;width:10%;height:10%;">Create Game</button>
+    <button class="btn" id="create_game" style="top:20%;left:43%;width:10%;height:10%;">Create Game</button>
     <button class="btn" id="one_player" style="top:40%;left:45%;width:10%;height:10%;">One Player</button>
     <button class="btn" id="two_players" style="top:60%;left:45%;width:10%;height:10%;">Two Players</button>
     <!--Choose Side Menu if player choose one player mode--> 
@@ -827,7 +827,7 @@
                 clearTimeout(this.timeout_2)
                 
                 menu.Buttons['GoodText'].style.visibility="visible";
-                menu.Buttons['GoodText'].innerHTML=`<font color="black">Waiting for the other player to Connect ....</font>`;
+                menu.Buttons['GoodText'].innerHTML=`<font color="black">Waiting for the other player to Connect! Send URL to invite other Player ...</font>`;
                 let success= await this.checkOtherPlayerConnection()
                 if(success){this.state=0;}
             }
