@@ -341,6 +341,7 @@
             //0-idle state, 1-calulator game,2-Process winning choice,3-Do winning animation,
             //4-Update players status with text and idle animation, 5- is there a winner,
             this.state=-2;
+            this.choose_side_state=0
             //
             this.idle_state=0;
             //
@@ -412,7 +413,7 @@
                         })
                         return await response.text()  
                     }catch(err){
-                        alert(`request fail with error ${err}`)
+                        console.log(`request fail with error ${err}`)
                         return ""
                     }
                 
@@ -426,7 +427,7 @@
                 })
                     return await response.text()  
                 }catch(err){
-                    alert(`request fail with error ${err}`)
+                    console.log(`request fail with error ${err}`)
                     return ""
                 }
             }
@@ -497,18 +498,60 @@
                 await this.communication("send",msg,"evil")
             }
         }
+        async restartEntriesInServer(){
+            
+            let msg=""
+            await this.communication("send",msg,"good")
+            await this.communication("send",msg,"evil")
+            
+        }
         async SelectPlayer(){
-            let good_data=JSON.parse(await this.communication("get","","good"))
-            let evil_data=JSON.parse(await this.communication("get","","evil"))
-            //if one is still the good player
-            if(good_data.round==0 && good_data.decision==0){
-                //
-                menu.choose_good_side=true;
-                this.send(JSON.stringify({round:0,decision:1}))
-            }else{
-                menu.choose_good_side=false;
-                this.send(JSON.stringify({round:0,decision:1}))
+            let good_data=null
+            let evil_data=null
+            try{
+                good_data=await this.communication("get","","good")
+                
+            }catch(e){
+                console.log(e)
+                return false
             }
+                        
+            if (good_data!=null && good_data!=undefined){
+                try{
+                    good_data=JSON.parse(good_data)
+                }catch(error){
+                    console.log(error)
+                    return false
+                }
+                
+                //if one is still the good player
+                if(good_data.round==0 && good_data.decision==0){
+                    //
+                    menu.choose_good_side=true;
+                    this.send(JSON.stringify({round:0,decision:1}))
+                    return true
+                }else{
+                    try{
+
+                        evil_data=await this.communication("get","","evil")
+                    }catch(e){
+                        console.log(e)
+                    }
+                    try{
+
+                        evil_data=JSON.parse(evil_data)
+                    }catch(e){
+                        console.log(e)
+                        return false
+                    }
+                    menu.choose_good_side=false;
+                    this.send(JSON.stringify({round:0,decision:1}))
+                    return true
+                }
+            }
+        
+            return false
+            
         }
        
         NextState(){
@@ -725,9 +768,19 @@
             }
             
         }
-        ChooseSide(){
-            this.SelectPlayer()//detects if you are the good or evil player base on server data
-            this.state++;//go to idle state
+        async ChooseSide(){
+            console.log('Choose Side state:'+this.choose_side_state);
+            
+            if(this.choose_side_state==1){
+                this.choose_side_state=2
+                setTimeout(()=>{this.choose_side_state=0},1000)
+            }
+            // if still did not chose side
+            if(this.choose_side_state==0){
+                this.choose_side_state=1
+                let success=await this.SelectPlayer()//detects if you are the good or evil player base on server data
+                if(success){this.state++;}//go to idle state
+            }
         }
         //
         async Idle(){
@@ -736,14 +789,16 @@
         
             console.log('idle state:'+this.idle_state);
             
-            //Wait for evil player first menu layer choice
-            
+            //
+            if(this.idle_state==6){
+                setTimeout(()=>{this.idle_state--},1000)
+            }
+            //wait for other user choice
             if(this.idle_state==5){
-                //hide previouse menus and show basic menu again
-                menu.HideButtons();
+                this.idle_state++;
                 let other_player_decision=JSON.parse(await this.get())
                 if(other_player_decision.decision!=null && other_player_decision.decision!="" && other_player_decision.decision!=0){
-                    if(other_player_decision.round==this.round){
+                    if(other_player_decision.round==this.round && other_player_decision.decision!=1){
 
                         other_player_decision.decision.split(",").forEach(el=>this.get_rival_player_options_array().push(el))
                         //state 2 is process choices
@@ -760,7 +815,7 @@
             if(this.idle_state==4){
                 //hide previouse menus and show basic menu again
                 menu.HideButtons();
-                menu.ShowIdleMenus();
+                //menu.ShowIdleMenus();
                 //forget previously touched buttons
                 menu.DeSelectButtons();
                 //show evil text I use good text because its more centered
@@ -1556,6 +1611,7 @@
                 
                 //
                 endGame=true;
+                this.restartEntriesInServer()
             }
             else{
                 
@@ -1579,6 +1635,7 @@
 
                     //
                     endGame=true;
+                    this.restartEntriesInServer()
                 }
                 else{
 
@@ -1600,6 +1657,7 @@
                         context.fillText("Good Wins!", canvas.width/2, canvas.height/2);
                         //
                         endGame=true;
+                        this.restartEntriesInServer()
                     }
                     //No one had lost 
                     else{
