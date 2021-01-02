@@ -739,13 +739,18 @@
             //Wait for evil player first menu layer choice
             
             if(this.idle_state==5){
-                
+                //hide previouse menus and show basic menu again
+                menu.HideButtons();
                 let other_player_decision=JSON.parse(await this.get())
                 if(other_player_decision.decision!=null && other_player_decision.decision!="" && other_player_decision.decision!=0){
-                    other_player_decision.decision.split(",").forEach(el=>this.get_rival_player_options_array().push(el))
-                    //state 2 is process choices
-                    //if receveived other player choices then move on...
-                    this.state=2;
+                    if(other_player_decision.round==this.round){
+
+                        other_player_decision.decision.split(",").forEach(el=>this.get_rival_player_options_array().push(el))
+                        //state 2 is process choices
+                        //if receveived other player choices then move on...
+                        this.idle_state=0;
+                        this.state=2;
+                    }
                 }
                 
             }
@@ -877,6 +882,8 @@
                 time=0;
                 actualAnimationRunning=Idle[0];
                 menu.ShowIdleMenus();
+                menu.Buttons['GoodText'].innerHTML=""
+                menu.Buttons['EvilText'].innerHTML=""
                 //Deselect previous selected buttons
                 menu.DeSelectButtons();
                 this.idle_state++;
@@ -1597,7 +1604,8 @@
                     //No one had lost 
                     else{
                         //return to the idle state of state machine
-                        this.state=2;
+                        this.state=0;
+                        this.idle_state=0;
                         this.round++;
                     }
                 }
