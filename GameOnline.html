@@ -820,7 +820,7 @@
                 menu.DeSelectButtons();
                 //show evil text I use good text because its more centered
                 menu.Buttons['GoodText'].style.visibility="visible";
-                menu.Buttons['GoodText'].innerHTML=`<font color="purple">Waiting for the other player ${(menu.choose_good_side)?"(Good Player - Left)":"(Evil Player - Right)"} Move!</font>`;
+                menu.Buttons['GoodText'].innerHTML=`<font color="purple">Waiting for the other player ${(menu.choose_good_side)?"(Evil Player - Right)":"(Good Player - Left)"} Move!</font>`;
                 //send player choice to server
                 this.send(this.createPlayerMsg())
                 this.idle_state++;
