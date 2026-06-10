@@ -371,12 +371,24 @@
     }
     function chooseAnimationFromSeed(list, seed, round = 0, salt = 0) {
       if (!list || !list.length) return null;
-      const order = seededShuffle(ArrayUtils.range0(list.length), Number(seed) + Number(salt));
+      const order = seededShuffle(
+        ArrayUtils.range0(list.length),
+        Number(seed) + Number(salt),
+      );
       return list[order[round % list.length]];
     }
-    function chooseAnimationCategoryFromSeed(map, category, seed, round = 0, salt = 0) {
+    function chooseAnimationCategoryFromSeed(
+      map,
+      category,
+      seed,
+      round = 0,
+      salt = 0,
+    ) {
       if (!map || !map[category] || !map[category].length) return null;
-      const order = seededShuffle(ArrayUtils.range0(map[category].length), Number(seed) + Number(salt));
+      const order = seededShuffle(
+        ArrayUtils.range0(map[category].length),
+        Number(seed) + Number(salt),
+      );
       return map[category][order[round % map[category].length]];
     }
     const copyToClipboard = (str) => {
@@ -391,53 +403,55 @@
       document.body.removeChild(el);
     };
 
-function handleIncomingMessage(rawMessage) {
-        let message = rawMessage;
-        if (typeof rawMessage === "string") {
-            try {
-                message = JSON.parse(rawMessage);
-            } catch (err) {
-                console.warn("Invalid message received", rawMessage);
-                return;
-            }
+    function handleIncomingMessage(rawMessage) {
+      let message = rawMessage;
+      if (typeof rawMessage === "string") {
+        try {
+          message = JSON.parse(rawMessage);
+        } catch (err) {
+          console.warn("Invalid message received", rawMessage);
+          return;
         }
+      }
 
-        if (remoteMessageResolvers.length > 0) {
-            for (let i = 0; i < remoteMessageResolvers.length; i++) {
-                if (
-                    (remoteMessageResolvers[i].round === null || remoteMessageResolvers[i].round === message.round) &&
-                    (message.type === "decision" || remoteMessageResolvers[i].round === null)
-                ) {
-                    const resolver = remoteMessageResolvers.splice(i, 1)[0];
-                    resolver.resolve(message);
-                    return;
-                }
-            }
+      if (remoteMessageResolvers.length > 0) {
+        for (let i = 0; i < remoteMessageResolvers.length; i++) {
+          if (
+            (remoteMessageResolvers[i].round === null ||
+              remoteMessageResolvers[i].round === message.round) &&
+            (message.type === "decision" ||
+              remoteMessageResolvers[i].round === null)
+          ) {
+            const resolver = remoteMessageResolvers.splice(i, 1)[0];
+            resolver.resolve(message);
+            return;
+          }
         }
+      }
 
-        incomingMessageQueue.push(message);
+      incomingMessageQueue.push(message);
     }
 
     function waitForRemoteMessage() {
-        return new Promise((resolve) => {
-            if (incomingMessageQueue.length > 0) {
-                resolve(incomingMessageQueue.shift());
-            } else {
-                remoteMessageResolvers.push({ round: null, resolve });
-            }
-        });
+      return new Promise((resolve) => {
+        if (incomingMessageQueue.length > 0) {
+          resolve(incomingMessageQueue.shift());
+        } else {
+          remoteMessageResolvers.push({ round: null, resolve });
+        }
+      });
     }
 
     function waitForDecisionMessage(round) {
-        for (let i = 0; i < incomingMessageQueue.length; i++) {
-            const message = incomingMessageQueue[i];
-            if (message && message.type === "decision" && message.round === round) {
-                incomingMessageQueue.splice(i, 1);
-                return Promise.resolve(message);
-            }
+      for (let i = 0; i < incomingMessageQueue.length; i++) {
+        const message = incomingMessageQueue[i];
+        if (message && message.type === "decision" && message.round === round) {
+          incomingMessageQueue.splice(i, 1);
+          return Promise.resolve(message);
         }
-        return new Promise((resolve) => {
-            remoteMessageResolvers.push({ round, resolve });
+      }
+      return new Promise((resolve) => {
+        remoteMessageResolvers.push({ round, resolve });
       });
     }
 
@@ -958,18 +972,20 @@ function handleIncomingMessage(rawMessage) {
             if (this.final_decision_good[0] == 0) {
               //consume attack resources by quantity
               this.goodStatus[0] -= this.final_decision_good[1];
-              //if resources are lower than zero takes life from player
+              //if resources are lower than zero, consume health instead
               if (this.goodStatus[0] < 0) {
-                this.goodStatus[2] += this.goodStatus[0];
+                const overflow = -this.goodStatus[0];
+                this.goodStatus[2] -= overflow;
               }
             }
             //defense
             if (this.final_decision_good[0] == 1) {
               //consume defense resources by quantity
               this.goodStatus[1] -= this.final_decision_good[1];
-              //if resources are lower than zero takes life from player
+              //if resources are lower than zero, consume health instead
               if (this.goodStatus[1] < 0) {
-                this.goodStatus[2] += this.goodStatus[1];
+                const overflow = -this.goodStatus[1];
+                this.goodStatus[2] -= overflow;
               }
             }
           }
@@ -998,18 +1014,20 @@ function handleIncomingMessage(rawMessage) {
             if (this.final_decision_evil[0] == 0) {
               //consume attack resources by quantity
               this.evilStatus[0] -= this.final_decision_evil[1];
-              //if resources are lower than zero takes life from player
+              //if resources are lower than zero, consume health instead
               if (this.evilStatus[0] < 0) {
-                this.evilStatus[2] += this.evilStatus[0];
+                const overflow = -this.evilStatus[0];
+                this.evilStatus[2] -= overflow;
               }
             }
             //defense
             if (this.final_decision_evil[0] == 1) {
               //consume defense resources by quantity
               this.evilStatus[1] -= this.final_decision_evil[1];
-              //if resources are lower than zero takes life from player
+              //if resources are lower than zero, consume health instead
               if (this.evilStatus[1] < 0) {
-                this.evilStatus[2] += this.evilStatus[1];
+                const overflow = -this.evilStatus[1];
+                this.evilStatus[2] -= overflow;
               }
             }
           }
@@ -1264,8 +1282,13 @@ function handleIncomingMessage(rawMessage) {
         //wait for other user choice
         if (this.idle_state == 5) {
           this.idle_state = 6;
-          const other_player_decision = await waitForDecisionMessage(this.round);
-          if (other_player_decision && other_player_decision.type === "decision") {
+          const other_player_decision = await waitForDecisionMessage(
+            this.round,
+          );
+          if (
+            other_player_decision &&
+            other_player_decision.type === "decision"
+          ) {
             const options = Array.isArray(other_player_decision.options)
               ? other_player_decision.options.map(Number)
               : String(other_player_decision.decision)
@@ -1275,9 +1298,13 @@ function handleIncomingMessage(rawMessage) {
             rivalOptions.length = 0;
             options.forEach((el) => rivalOptions.push(el));
             if (menu.choose_good_side) {
-              this.final_decision_evil_seed = Number(other_player_decision.animationSeed) || this.round * 100 + 50;
+              this.final_decision_evil_seed =
+                Number(other_player_decision.animationSeed) ||
+                this.round * 100 + 50;
             } else {
-              this.final_decision_good_seed = Number(other_player_decision.animationSeed) || this.round * 100 + 50;
+              this.final_decision_good_seed =
+                Number(other_player_decision.animationSeed) ||
+                this.round * 100 + 50;
             }
             this.idle_state = 0;
             this.state = 2;
@@ -1451,8 +1478,8 @@ function handleIncomingMessage(rawMessage) {
             menu.HideButtons();
             //good player gives evil damage
             this.evilStatus[2] -= this.final_decision_good[1];
-            //good player consumes attack status
-            this.goodStatus[0] -= this.final_decision_good[1];
+            //good player consumes attack status (and overflow health if needed)
+            this.consumeResource(true);
             //here we put the animations on AnimationsStack
             //Just need to put good attack animation
             this.AnimationStack.push(
@@ -1536,8 +1563,8 @@ function handleIncomingMessage(rawMessage) {
           if (this.final_decision_evil[0] == 0) {
             //evil damages good
             this.goodStatus[2] -= this.final_decision_evil[1];
-            //evil player consumes attack status
-            this.evilStatus[0] -= this.final_decision_evil[1];
+            //evil player consumes attack status (and overflow health if needed)
+            this.consumeResource(false);
             //here we put the animations on AnimationsStack
             //Just need to put one animation from the attack
             this.AnimationStack.push(
@@ -1738,7 +1765,8 @@ function handleIncomingMessage(rawMessage) {
                       this.final_decision_good_seed +
                       this.final_decision_evil_seed,
                     this.round,
-                    this.final_decision_good_seed + this.final_decision_evil_seed,
+                    this.final_decision_good_seed +
+                      this.final_decision_evil_seed,
                   ),
                 );
               }
