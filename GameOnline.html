@@ -2,6 +2,7 @@
 <head>
 <title>Game!</title>    
 <script src="ArrayUtils.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.3/dist/peerjs.min.js"></script>
 </head>
 <style>
     /*html, body,canvas {
@@ -72,7 +73,8 @@
     <!--<h1 class="text" style="top:30%;left:45%;width:10%;height:10%;"><font color="white"></font></h1>-->
     <!--Now The Game Menus -->
     <!--First Menu-->
-    <button class="btn" id="create_game" style="top:20%;left:43%;width:10%;height:10%;">Create Game</button>
+    <button class="btn" id="create_game" style="top:20%;left:35%;width:10%;height:10%;">Create Game</button>
+    <button class="btn" id="join_game" style="top:20%;left:50%;width:10%;height:10%;">Join Game</button>
     <button class="btn" id="one_player" style="top:40%;left:45%;width:10%;height:10%;">One Player</button>
     <button class="btn" id="two_players" style="top:60%;left:45%;width:10%;height:10%;">Two Players</button>
     <!--Choose Side Menu if player choose one player mode--> 
@@ -133,6 +135,14 @@
     let Idle_iterator
     let BothAttack_iterator
 
+    let isHost = false;
+    let connectionStarted = false;
+    let connectionOpen = false;
+    let peerConnection = null;
+    let dataChannel = null;
+    let incomingMessageQueue = [];
+    let remoteMessageResolvers = [];
+
     /* function shuffle(array) {
     var currentIndex = array.length, temporaryValue, randomIndex;
 
@@ -163,6 +173,18 @@
         return permute[i++]
         }}
     }
+    function deterministicIndex(length, seed) {
+        if (!length) return 0;
+        return Math.abs(seed) % length;
+    }
+    function chooseAnimation(list, seed) {
+        if (!list || !list.length) return null;
+        return list[deterministicIndex(list.length, seed)];
+    }
+    function chooseAnimationCategory(map, category, seed) {
+        if (!map || !map[category] || !map[category].length) return null;
+        return map[category][deterministicIndex(map[category].length, seed)];
+    }
     const copyToClipboard = (str) => {
         const el = document.createElement("textarea");
         el.value = str;
@@ -174,13 +196,95 @@
         document.execCommand("copy");
         document.body.removeChild(el);
     };
-    
-    
+
+    function handleIncomingMessage(message) {
+        if (remoteMessageResolvers.length > 0) {
+            const resolve = remoteMessageResolvers.shift();
+            resolve(message);
+        } else {
+            incomingMessageQueue.push(message);
+        }
+    }
+
+    function waitForRemoteMessage() {
+        return new Promise((resolve) => {
+            if (incomingMessageQueue.length > 0) {
+                resolve(incomingMessageQueue.shift());
+            } else {
+                remoteMessageResolvers.push(resolve);
+            }
+        });
+    }
+
+    function setupDataChannelHandlers(conn) {
+        dataChannel = conn;
+        conn.on('open', () => {
+            connectionOpen = true;
+            console.log('PeerJS connection open');
+            if (menu && menu.Buttons && menu.Buttons['GoodText']) {
+                menu.Buttons['GoodText'].style.visibility = 'visible';
+                menu.Buttons['GoodText'].innerHTML = '<font color="green">WebRTC connected. Starting game...</font>';
+            }
+        });
+        conn.on('data', (data) => {
+            handleIncomingMessage(data);
+        });
+        conn.on('close', () => {
+            connectionOpen = false;
+            console.log('PeerJS connection closed');
+        });
+        conn.on('error', (err) => {
+            console.warn('PeerJS connection error', err);
+        });
+    }
+
+    async function setupWebRTCConnection() {
+        if (connectionStarted) {
+            return;
+        }
+        connectionStarted = true;
+        const room = game.getRoomName();
+        isHost = localStorage.getItem('webrtcHostRoom') === room;
+        peer = new Peer(isHost ? room : undefined);
+
+        await new Promise((resolve) => {
+            const ready = () => {
+                peer.off('open', ready);
+                peer.off('error', ready);
+                resolve();
+            };
+            peer.on('open', ready);
+            peer.on('error', ready);
+        });
+
+        peer.on('error', (err) => {
+            console.warn('Peer error', err);
+        });
+
+        if (isHost) {
+            peer.on('connection', (conn) => {
+                setupDataChannelHandlers(conn);
+            });
+            if (menu && menu.Buttons && menu.Buttons['GoodText']) {
+                menu.Buttons['GoodText'].innerHTML = '<font color="black">Host ready. Share key: ' + room + '</font>';
+            }
+        } else {
+            const hostId = room;
+            const conn = peer.connect(hostId);
+            setupDataChannelHandlers(conn);
+            conn.on('open', () => {
+                console.log('Connected to host', hostId);
+            });
+            localStorage.removeItem('webrtcHostRoom');
+        }
+    }
+
     class Menu{
         
         constructor(){
             this.Buttons={};
             this.Buttons["Create Game"]=document.getElementById("create_game");
+            this.Buttons["JoinGame"]=document.getElementById("join_game");
             this.Buttons["OnePlayer"]=document.getElementById("one_player");
             this.Buttons["TwoPlayers"]=document.getElementById("two_players");
             this.Buttons["GoodSide"]=document.getElementById("good_side");
@@ -229,6 +333,7 @@
             
             //AddEventListeners
             this.Buttons["Create Game"].addEventListener("click",this.CreateGame,false);
+            this.Buttons["JoinGame"].addEventListener("click",this.JoinGame,false);
             this.Buttons["OnePlayer"].addEventListener("click",this.OnePlayer,false);
             this.Buttons["TwoPlayers"].addEventListener("click",this.TwoPlayers,false);
             this.Buttons["GoodSide"].addEventListener("click",function(){menu.ChooseSide(true)},false);
@@ -255,9 +360,24 @@
         }
         
         CreateGame(){
-            let room_id=menu.RandomPassSync(6)
-            copyToClipboard(window.location.href+'?'+room_id)
-            window.location.search=room_id
+            let room_id=menu.RandomPassSync(12)
+            localStorage.setItem('webrtcHostRoom', room_id)
+            let url = window.location.href.split('?')[0] + '?' + room_id
+            copyToClipboard(url)
+            alert('Game created. Share this key with the other player: ' + room_id)
+            window.location.href=url
+        }
+        JoinGame(){
+            let room_key = prompt('Enter the game key or URL provided by the creator:')
+            if (!room_key) return;
+            room_key = room_key.trim();
+            if (room_key.indexOf('?') >= 0) {
+                room_key = room_key.split('?').pop();
+            }
+            if (!room_key) return;
+            localStorage.removeItem('webrtcHostRoom')
+            let url = window.location.href.split('?')[0] + '?' + room_key
+            window.location.href = url
         }
         moveBar(percentage){
             //change text
@@ -403,59 +523,20 @@
             return window.location.search.slice(1)
         }
         async communication(get="get",msg="", good_or_evil){
-            let url="http://pedroth.duckdns.org/"
-            let sync_id=this.getRoomName()+"_"+good_or_evil
-            if(get=="get"){
-                    try{
-        
-                        var response=await fetch(url+"getKey",{
-                            method: 'POST',
-                            "Content-Type":"text/html",
-                            body: sync_id
-                        })
-                        return await response.text()  
-                    }catch(err){
-                        console.log(`request fail with error ${err}`)
-                        return ""
-                    }
-                
-            }else{
-                try{
-        
-                var response=await fetch(url+"setKey/"+sync_id,{
-                    method: 'POST',
-                    "Content-Type":"text/html",
-                    body: msg
-                })
-                    return await response.text()  
-                }catch(err){
-                    console.log(`request fail with error ${err}`)
-                    return ""
-                }
-            }
-  
+            // serverless WebRTC mode - no server communication
+            return "";
         }
         async send(msg){
-            //if good player
-            if(menu.choose_good_side){
-                return await this.communication("send",msg,"good")
+            if (!dataChannel || !connectionOpen) {
+                console.log('Data channel not open, cannot send');
+                return;
             }
-            //if evil player
-            else{
-                return await this.communication("send",msg,"evil")
-            }
+            dataChannel.send(msg);
         }
         async get(){
-            //if good player, will get evil info
-            if(menu.choose_good_side){
-                return await this.communication("get","","evil")
-            }
-            //if evil player, will get good info
-            else{
-                return await this.communication("get","","good")
-            }
+            return await waitForRemoteMessage();
         }
-        
+
         initialize_player_options_array(){
             //if good player
             if(menu.choose_good_side){
@@ -491,111 +572,19 @@
             return JSON.stringify({round:this.round,decision:decision_value})
         }
         async AddEntriesInServer(){
-            //if there is not any entry  info in the server then create
-            let server_entry=await this.communication("get","","good")
-            if(server_entry=="" || server_entry==null || server_entry==undefined){
-
-                let msg=JSON.stringify({round:this.round,decision:0})
-                await this.communication("send",msg,"good")
-                await this.communication("send",msg,"evil")
-            }
+            // serverless WebRTC mode - no server entries required
+            return;
         }
         async restartEntriesInServer(){
-            
-            let msg=""
-            await this.communication("send",msg,"good")
-            await this.communication("send",msg,"evil")
-            
+            // serverless WebRTC mode - nothing to restart
+            return;
         }
         async SelectPlayer(){
-            let good_data=null
-            let evil_data=null
-            try{
-                good_data=await this.communication("get","","good")
-                
-            }catch(e){
-                console.log(e)
-                return false
-            }
-                        
-            if (good_data!=null && good_data!=undefined){
-                try{
-                    good_data=JSON.parse(good_data)
-                }catch(error){
-                    console.log(error)
-                    return false
-                }
-                
-                //if one is still the good player
-                if(good_data.round==0 && good_data.decision==0){
-                    //
-                    menu.choose_good_side=true;
-                    this.send(JSON.stringify({round:0,decision:1}))
-                    return true
-                }else{
-                    try{
-
-                        evil_data=await this.communication("get","","evil")
-                    }catch(e){
-                        console.log(e)
-                    }
-                    try{
-
-                        evil_data=JSON.parse(evil_data)
-                    }catch(e){
-                        console.log(e)
-                        return false
-                    }
-                    menu.choose_good_side=false;
-                    this.send(JSON.stringify({round:0,decision:1}))
-                    return true
-                }
-            }
-        
-            return false
-            
+            menu.choose_good_side = isHost;
+            return connectionStarted || connectionOpen;
         }
        async checkOtherPlayerConnection(){
-        let good_data=null
-        let evil_data=null   
-        //if player is the good player check for evil player
-        if (menu.choose_good_side){
-            try{
-                evil_data=await this.communication("get","","evil")
-            }catch(e){
-                console.log(e)
-                return false
-            }
-            try{
-                evil_data=JSON.parse(evil_data)
-            }catch(e){
-                console.log(e)
-                return false
-            }
-            if(evil_data.decision==1){
-                return true
-            }
-            return false
-        }
-        else{
-            //check for good player
-            try{
-                good_data=await this.communication("get","","good")
-            }catch(e){
-                console.log(e)
-                return false
-            }
-            try{
-                good_data=JSON.parse(good_data)
-            }catch(e){
-                console.log(e)
-                return false
-            }
-            if(good_data.decision==1){
-                return true
-            }
-            return false
-        }
+            return connectionOpen;
        }
         NextState(){
             game.state++;
@@ -726,39 +715,36 @@
             //this if state is like this because it only enters here in case
             //it was good decision and is was the winner or the game needs two animations
             if(this.final_decision_good[0]==0 && (good || two_animations)){
-                //Put in animation stack a random good attack animation
-                this.AnimationStack.push(GoodAttacks[GoodAttacks_iterator.next()]);
-                
+                //Put in animation stack a deterministic good attack animation
+                this.AnimationStack.push(chooseAnimation(GoodAttacks, this.round*100 + this.final_decision_good[0]*10 + this.final_decision_good[1]));
             }
             //if good did a defense
             //this if state is like this because it only enters here in case
             //it was good decision and is was the winner or the game needs two animations
             if(this.final_decision_good[0]==1 && (good||two_animations)){
-                //Put in animation stack a random good defense animation
-                this.AnimationStack.push(GoodDefense[GoodDefense_iterator.next()]);
-                
+                //Put in animation stack a deterministic good defense animation
+                this.AnimationStack.push(chooseAnimation(GoodDefense, this.round*100 + this.final_decision_good[0]*10 + this.final_decision_good[1]));
             }
             //if good did a PA
             //this if state is like this because it only enters here in case
             //it was good decision and is was the winner or the game needs two animations
             if(this.final_decision_good[0]==20 && (good||two_animations)){
-                //Put in animation stack a random good defense animation
-                this.AnimationStack.push(GoodEvolve['Attack'][GoodEvolve_iterator['Attack'].next()]);
-                
+                //Put in animation stack a deterministic good powerup attack animation
+                this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Attack', this.round*100 + 20 + this.final_decision_good[1]));
             }
              //if good did a PD
             //this if state is like this because it only enters here in case
             //it was good decision and is was the winner or the game needs two animations
             if(this.final_decision_good[0]==21 && (good||two_animations)){
-                //Put in animation stack a random good defense animation
-                this.AnimationStack.push(GoodEvolve['Defense'][GoodEvolve_iterator['Defense'].next()]);
+                //Put in animation stack a deterministic good powerup defense animation
+                this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Defense', this.round*100 + 21 + this.final_decision_good[1]));
             }
              //if good did a PH
             //this if state is like this because it only enters here in case
             //it was good decision and it was the winner or the game needs two animations
             if(this.final_decision_good[0]==22 && (good||two_animations)){
-                //Put in animation stack a random good defense animation
-                this.AnimationStack.push(GoodEvolve['Health'][GoodEvolve_iterator['Health'].next()]);
+                //Put in animation stack a deterministic good powerup health animation
+                this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Health', this.round*100 + 22 + this.final_decision_good[1]));
             }
             
             //Evil if's
@@ -767,53 +753,52 @@
             //this if state is like this because it only enters here in case
             //it was evil decision and it was the winner or the game  needs two animations
             if(this.final_decision_evil[0]==0 &&(!good||two_animations)){//!good is because evil won
-                //Put in animation stack a random evil attack animation
-                this.AnimationStack.push(EvilAttacks[EvilAttacks_iterator.next()]);
+                //Put in animation stack a deterministic evil attack animation
+                this.AnimationStack.push(chooseAnimation(EvilAttacks, this.round*100 + this.final_decision_evil[0]*10 + this.final_decision_evil[1]));
             }
             //if evil did a defense
             //this if state is like this, because it only enters here in case
             //it was an evil decision and he was the winner, or the game  needs two animations
             if(this.final_decision_evil[0]==1 &&(!good||two_animations)){
-                //Put in animation stack a random evil defense animation
-                this.AnimationStack.push(EvilDefense[EvilDefense_iterator.next()]);
+                //Put in animation stack a deterministic evil defense animation
+                this.AnimationStack.push(chooseAnimation(EvilDefense, this.round*100 + this.final_decision_evil[0]*10 + this.final_decision_evil[1]));
             }
             //if evil did a PA
             //this if state is like this, because it only enters here in case
             //it was an evil decision and he was the winner, or the game  needs two animations
             if(this.final_decision_evil[0]==20 &&(!good||two_animations)){
-                //Put in animation stack a random evil defense animation
-                this.AnimationStack.push(EvilEvolve['Attack'][EvilEvolve_iterator['Attack'].next()]);
+                //Put in animation stack a deterministic evil powerup attack animation
+                this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Attack', this.round*100 + 20 + this.final_decision_evil[1]));
             }
             //if evil did a PD
             //this if state is like this, because it only enters here in case
             //it was an evil decision and he was the winner, or the game  needs two animations
             if(this.final_decision_evil[0]==21 &&(!good||two_animations)){
-                //Put in animation stack a random evil defense animation
-                this.AnimationStack.push(EvilEvolve['Defense'][EvilEvolve_iterator['Defense'].next()]);
+                //Put in animation stack a deterministic evil powerup defense animation
+                this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Defense', this.round*100 + 21 + this.final_decision_evil[1]));
             }
             //if evil did a PH
             //this if state is like this, because it only enters here in case
             //it was an evil decision and he was the winner, or the game  needs two animations
             if(this.final_decision_evil[0]==22 &&(!good||two_animations)){
-                //Put in animation stack a random evil defense animation
-                this.AnimationStack.push(EvilEvolve['Health'][EvilEvolve_iterator['Health'].next()]);
+                //Put in animation stack a deterministic evil powerup health animation
+                this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Health', this.round*100 + 22 + this.final_decision_evil[1]));
             }
             
         }
         //
         Nothing(){
-            // does not have room name
-            
             if(this.getRoomName()==""){
-                //wait until player choose to create
+                // waiting for create/join selection
             }else{
-                this.AddEntriesInServer()
                 menu.HideButtons();
                 menu.Buttons['GoodText'].style.visibility="visible";
-                menu.Buttons['GoodText'].innerHTML=`<font color="black">Connecting...</font>`;
-                this.state++;// go to chose side state
+                menu.Buttons['GoodText'].innerHTML=`<font color="black">Connecting with WebRTC... paste offer/answer as needed.</font>`;
+                if (!connectionStarted) {
+                    setupWebRTCConnection();
+                }
+                this.state = -1;
             }
-            
         }
         async ChooseSide(){
             console.log('Choose Side state:'+this.choose_side_state);
@@ -1051,7 +1036,7 @@
                     this.goodStatus[0]-=this.final_decision_good[1];
                     //here we put the animations on AnimationsStack
                     //Just need to put good attack animation
-                    this.AnimationStack.push(GoodAttacks[GoodAttacks_iterator.next()]);
+                    this.AnimationStack.push(chooseAnimation(GoodAttacks, this.round*100 + this.final_decision_good[0]*10 + this.final_decision_good[1]));
                     entered++;
                     //0 position is the text to use
                     this.WinnigText[0]='Good Player Attack!!';
@@ -1078,16 +1063,16 @@
                     //So we need to see what power up evil did and
                     //put it in Animation Stack
                     if(this.final_decision_evil[0]==20){
-                        //Put random Evil attack power up 
-                        this.AnimationStack.push(EvilEvolve['Attack'][EvilEvolve_iterator['Attack'].next()]);
+                        //Put deterministic Evil attack power up 
+                        this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Attack', this.round*100 + 20 + this.final_decision_evil[1]));
                     }
                     if(this.final_decision_evil[0]==21){
-                        //Put random Evil defense power up 
-                        this.AnimationStack.push(EvilEvolve['Defense'][EvilEvolve_iterator['Defense'].next()]);
+                        //Put deterministic Evil defense power up 
+                        this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Defense', this.round*100 + 21 + this.final_decision_evil[1]));
                     }
                     if(this.final_decision_evil[0]==22){
-                        //Put random Evil health power up 
-                        this.AnimationStack.push(EvilEvolve['Health'][EvilEvolve_iterator['Health'].next()]);
+                        //Put deterministic Evil health power up 
+                        this.AnimationStack.push(chooseAnimationCategory(EvilEvolve, 'Health', this.round*100 + 22 + this.final_decision_evil[1]));
                     }
                     
                 }
@@ -1100,7 +1085,7 @@
                     this.evilStatus[0]-=this.final_decision_evil[1];
                     //here we put the animations on AnimationsStack
                     //Just need to put one animation from the attack
-                    this.AnimationStack.push(EvilAttacks[EvilAttacks_iterator.next()]);
+                    this.AnimationStack.push(chooseAnimation(EvilAttacks, this.round*100 + this.final_decision_evil[0]*10 + this.final_decision_evil[1]));
                     entered++;
                     //0 position is the text to use
                     this.WinnigText[0]='Evil Player Attack!!';
@@ -1125,16 +1110,16 @@
                     //So we need to see what power up good player did and
                     //put it in Animation Stack
                     if(this.final_decision_good[0]==20){
-                        //Put random good attack power up 
-                        this.AnimationStack.push(GoodEvolve['Attack'][GoodEvolve_iterator['Attack'].next()]);
+                        //Put deterministic good attack power up 
+                        this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Attack', this.round*100 + 20 + this.final_decision_good[1]));
                     }
                     if(this.final_decision_good[0]==21){
-                        //Put random Good defense power up 
-                        this.AnimationStack.push(GoodEvolve['Defense'][GoodEvolve_iterator['Defense'].next()]);
+                        //Put deterministic Good defense power up 
+                        this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Defense', this.round*100 + 21 + this.final_decision_good[1]));
                     }
                     if(this.final_decision_good[0]==22){
-                        //Put random Good health power up 
-                        this.AnimationStack.push(GoodEvolve['Health'][GoodEvolve_iterator['Health'].next()]);
+                        //Put deterministic Good health power up 
+                        this.AnimationStack.push(chooseAnimationCategory(GoodEvolve, 'Health', this.round*100 + 22 + this.final_decision_good[1]));
                     }
                 }
                 
@@ -1249,7 +1234,7 @@
                             //position 1 is the color of text
                             this.WinnigText[1]='black';
                             //Put animation in stack so that in next stage it does not break
-                            this.AnimationStack.push(BothAttack[BothAttack_iterator.next()]);
+                            this.AnimationStack.push(chooseAnimation(BothAttack, this.round*100 + this.final_decision_good[0]*10 + this.final_decision_evil[0]));
                         }
                         
                         
@@ -2087,6 +2072,7 @@
                 menu.Buttons['BarBehind'].style.visibility="hidden";
                 menu.Buttons['LoadingBar'].style.visibility="hidden";
                 menu.Buttons['Create Game'].style.visibility="visible";
+                menu.Buttons['JoinGame'].style.visibility="visible";
                 
                 firstTime=false;
             }
